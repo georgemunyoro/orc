@@ -21,6 +21,8 @@ private:
   AST_VariableDeclaration *parse_variable_declaration();
   AST_VariableAssignment *parse_variable_assignment();
   AST_VariableReference *parse_variable_reference();
+  AST_FunctionDefinition *parse_function_definition();
+  AST_FunctionCall *parse_function_call();
 
   Token *current_token();
   Token *peek_next_token();

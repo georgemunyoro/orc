@@ -121,3 +121,64 @@ void AST_StringLiteral::print(int indent) {
   printf("%sStringLiteral(%s)\n", boom_utils::indent_string(indent).c_str(),
          this->value.c_str());
 }
+
+/* AST_FunctionDefinition */
+
+AST_FunctionDefinition::AST_FunctionDefinition(
+    std::string name, std::vector<AST_FunctionArgument *> args,
+    AST_Block *body) {
+  this->name = name;
+  this->args = args;
+  this->body = body;
+}
+
+AST_FunctionDefinition::~AST_FunctionDefinition() {}
+
+void AST_FunctionDefinition::print(int indent) {
+  printf("%sFunctionDefinition(\n%s%s\n",
+         boom_utils::indent_string(indent).c_str(),
+         boom_utils::indent_string(indent + 1).c_str(), this->name.c_str());
+  printf("%sArguments(\n", boom_utils::indent_string(indent + 1).c_str());
+  for (AST_FunctionArgument *arg : this->args)
+    arg->print(indent + 2);
+  printf("%s)\n", boom_utils::indent_string(indent + 1).c_str());
+  this->body->print(indent + 1);
+  printf("%s)\n", boom_utils::indent_string(indent).c_str());
+}
+
+/* AST_FunctionArgument */
+
+AST_FunctionArgument::AST_FunctionArgument(std::string name, std::string type) {
+  this->name = name;
+  this->type = type;
+}
+
+AST_FunctionArgument::~AST_FunctionArgument() {}
+
+void AST_FunctionArgument::print(int indent) {
+  printf("%sFunctionArgument(\n%s%s\n%s%s\n",
+         boom_utils::indent_string(indent).c_str(),
+         boom_utils::indent_string(indent + 1).c_str(), this->name.c_str(),
+         boom_utils::indent_string(indent + 1).c_str(), this->type.c_str());
+  printf("%s)\n", boom_utils::indent_string(indent).c_str());
+}
+
+/* AST_FunctionCall */
+
+AST_FunctionCall::AST_FunctionCall(std::string name,
+                                   std::vector<AST_Node *> args) {
+  this->name = name;
+  this->args = args;
+}
+
+AST_FunctionCall::~AST_FunctionCall() {}
+
+void AST_FunctionCall::print(int indent) {
+  printf("%sFunctionCall(\n%s%s\n", boom_utils::indent_string(indent).c_str(),
+         boom_utils::indent_string(indent + 1).c_str(), this->name.c_str());
+  printf("%sArguments(\n", boom_utils::indent_string(indent + 1).c_str());
+  for (AST_Node *arg : this->args)
+    arg->print(indent + 2);
+  printf("%s)\n", boom_utils::indent_string(indent + 1).c_str());
+  printf("%s)\n", boom_utils::indent_string(indent).c_str());
+}

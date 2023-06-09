@@ -75,7 +75,6 @@ public:
 
   AST_Node_Type get_type() { return AST_NODE_BLOCK; }
 
-private:
   std::vector<AST_Node *> nodes;
 };
 
@@ -109,4 +108,38 @@ public:
 
 private:
   std::string value;
+};
+
+class AST_FunctionArgument : public AST_Node {
+public:
+  AST_FunctionArgument(std::string name, std::string type);
+  ~AST_FunctionArgument();
+  void print(int indent = 0);
+
+  std::string name;
+  std::string type;
+};
+
+class AST_FunctionDefinition : public AST_Node {
+public:
+  AST_FunctionDefinition(std::string name,
+                         std::vector<AST_FunctionArgument *> args,
+                         AST_Block *body);
+  ~AST_FunctionDefinition();
+  void print(int indent = 0);
+
+  std::string name;
+  std::string return_type;
+  std::vector<AST_FunctionArgument *> args;
+  AST_Block *body;
+};
+
+class AST_FunctionCall : public AST_Node {
+public:
+  AST_FunctionCall(std::string name, std::vector<AST_Node *> args);
+  ~AST_FunctionCall();
+  void print(int indent = 0);
+
+  std::string name;
+  std::vector<AST_Node *> args;
 };
