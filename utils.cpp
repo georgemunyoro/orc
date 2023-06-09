@@ -18,7 +18,7 @@ bool is_digit(char c) { return c >= '0' && c <= '9'; }
 std::string trim_string(std::string str) {
   int first_non_whitespace = str.find_first_not_of(" \t\n");
   int last_non_whitespace = str.find_last_not_of(" \t\n");
-  if (first_non_whitespace == std::string::npos)
+  if (first_non_whitespace == (int)std::string::npos)
     return "";
   return str.substr(first_non_whitespace,
                     last_non_whitespace - first_non_whitespace + 1);

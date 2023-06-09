@@ -9,6 +9,7 @@
 #include "parser.h"
 #include "token.h"
 #include "utils.h"
+#include "orc_llvm.h"
 
 int main() {
   std::string source;
@@ -16,12 +17,11 @@ int main() {
   Lexer lexer(source);
   std::vector<Token> tokens = lexer.lex();
 
-  // for (Token token : tokens)
-  // printf("%4d - %s\n", token.id, token.value.c_str());
-
   Parser parser(&tokens);
   AST_Node *ast = parser.parse();
-  ast->print();
+
+  OrcLLVM olm;
+  olm.exec(ast);
 
   return 0;
 }

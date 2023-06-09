@@ -1,7 +1,1 @@
-
-func say_hello(int age, int word) {
-    var string something = "Hello, World!";
-    something = 12;
-}
-
-say_hello(12, 13);
+42

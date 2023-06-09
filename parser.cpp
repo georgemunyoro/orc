@@ -25,7 +25,9 @@ AST_Node *Parser::parse() {
       break;
   }
 
-  return ast;
+  std::string f_name = "main";
+  std::vector<AST_FunctionArgument*> f_args;
+  return new AST_FunctionDefinition(f_name, f_args, ast);
 }
 
 AST_FunctionDefinition *Parser::parse_function_definition() {
@@ -88,7 +90,7 @@ AST_VariableDeclaration *Parser::parse_variable_declaration() {
   std::vector<Token> v_type_tokens;
   int eq_sign_pos, end_pos;
 
-  for (int i = this->cursor + 1; i < this->tokens->size(); i++) {
+  for (size_t i = this->cursor + 1; i < this->tokens->size(); i++) {
     Token t = this->tokens->at(i);
 
     if (t.id == TOKEN_OPERATOR_EQUALS) {
