@@ -16,9 +16,12 @@ int main() {
   Lexer lexer(source);
   std::vector<Token> tokens = lexer.lex();
 
+  // for (Token token : tokens)
+  // printf("%4d - %s\n", token.id, token.value.c_str());
+
   Parser parser(&tokens);
-  AST_Node ast = parser.parse();
-  ast.print();
+  AST_Node *ast = parser.parse();
+  ast->print();
 
   return 0;
 }

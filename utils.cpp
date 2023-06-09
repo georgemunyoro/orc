@@ -23,4 +23,11 @@ std::string trim_string(std::string str) {
   return str.substr(first_non_whitespace,
                     last_non_whitespace - first_non_whitespace + 1);
 }
+
+std::string indent_string(int indent) {
+  std::string result = "";
+  for (int i = 0; i < indent; i++)
+    result += "  ";
+  return result;
+}
 } // namespace boom_utils

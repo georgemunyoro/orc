@@ -5,13 +5,16 @@ std::vector<Token> Lexer::lex() {
   for (char c : this->source) {
     this->buffer += c;
 
+    // printf("C: %3c B: %s\n", c, this->buffer.c_str());
+
     if (this->in_string) {
       this->handle_string_char(c);
       continue;
     }
 
     if (this->in_number) {
-      if (this->handle_number_char(c) == false)
+      this->handle_number_char(c);
+      if (this->in_number)
         continue;
     }
 
@@ -131,10 +134,9 @@ bool Lexer::handle_string_char(char c) {
 }
 
 bool Lexer::handle_number_char(char c) {
-  if (boom_utils::is_digit(c) || c == '.')
+  if (boom_utils::is_digit(c) || c == '.') {
     return true;
-
-  this->in_number = false;
+  }
 
   // The number is everything in the buffer except the
   // last character, which is the character that caused
@@ -142,6 +144,7 @@ bool Lexer::handle_number_char(char c) {
   this->push_token(TOKEN_NUMBER,
                    this->buffer.substr(0, this->buffer.length() - 1));
   this->buffer = c;
+  this->in_number = false;
   return false;
 }
 
