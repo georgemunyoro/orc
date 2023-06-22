@@ -26,7 +26,7 @@ AST_Node *Parser::parse() {
   }
 
   std::string f_name = "main";
-  std::vector<AST_FunctionArgument*> f_args;
+  std::vector<AST_FunctionArgument *> f_args;
   return new AST_FunctionDefinition(f_name, f_args, ast);
 }
 
@@ -38,18 +38,23 @@ AST_FunctionDefinition *Parser::parse_function_definition() {
   std::vector<AST_FunctionArgument *> f_args;
   this->cursor += 1;
 
-  for (;;) {
-    AST_FunctionArgument *arg = new AST_FunctionArgument(
-        this->current_token()->value, this->peek_next_token()->value);
+  if (this->current_token()->id == TOKEN_PAREN_CLOSE) {
+    this->cursor += 1;
+  } else {
+    for (;;) {
 
-    f_args.push_back(arg);
+      AST_FunctionArgument *arg = new AST_FunctionArgument(
+          this->current_token()->value, this->peek_next_token()->value);
 
-    if (this->tokens->at(this->cursor + 2).id == TOKEN_PAREN_CLOSE) {
+      f_args.push_back(arg);
+
+      if (this->tokens->at(this->cursor + 2).id == TOKEN_PAREN_CLOSE) {
+        this->cursor += 3;
+        break;
+      }
+
       this->cursor += 3;
-      break;
     }
-
-    this->cursor += 3;
   }
 
   AST_Node *f_block = this->parse_expr();
