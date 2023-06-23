@@ -13,7 +13,7 @@
 
 int main() {
   std::string source;
-  boom_utils::read_source_file("./main.bl", &source);
+  boom_utils::read_source_file("./main.orc", &source);
   Lexer lexer(source);
   std::vector<Token> tokens = lexer.lex();
 

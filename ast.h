@@ -7,7 +7,6 @@
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/IRBuilder.h"
 
-
 enum AST_Node_Type {
   AST_NODE_UNKNOWN = 0,
   AST_NODE_EOF,
