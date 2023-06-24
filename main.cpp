@@ -22,7 +22,7 @@ int main() {
 
   OrcLLVM olm;
   // olm.exec(ast);
-  olm.generate_binary("a.out");
+  olm.generate_binary(ast, "a.out");
 
   return 0;
 }

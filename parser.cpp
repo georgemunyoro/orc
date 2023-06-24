@@ -162,7 +162,6 @@ AST_Conditional *Parser::parse_conditional() {
   AST_Block *onTrueBlock = (AST_Block *)this->parse_expr();
   AST_Block *onFalseBlock = nullptr;
 
-  std::cout << current_token()->value << std::endl;
   if (current_token()->value == "else") {
     ++this->cursor;
     onFalseBlock = (AST_Block *)this->parse_expr();

@@ -434,6 +434,27 @@ llvm::Value *AST_FunctionCall::codegen(
     std::unique_ptr<llvm::Module> &module,
     std::unique_ptr<std::map<std::string, VariableDefinition>> &variables) {
 
+  if (this->name == "return") {
+    /*
+      EOF is part of the function arguments, therefore when we have no arguments
+      provided e.g. call_function(), it is represented as having a single EOF
+      argument in the AST.
+    */
+    if (this->args.size() == 1) {
+      return builder->CreateRetVoid();
+    } else {
+
+      if (this->args.size() > 2) {
+        std::cout
+            << "Error! Cannot return more than 1 value from a function.\n";
+        exit(1);
+      }
+
+      return builder->CreateRet(
+          this->args.at(0)->codegen(builder, context, module, variables));
+    }
+  }
+
   llvm::Function *func = module->getFunction(this->name);
 
   if (func == nullptr) {
@@ -493,7 +514,7 @@ llvm::Value *AST_FunctionCall::codegen(
       }
     }
 
-    builder->CreateCall(printfFunc, printfArgs);
+    return builder->CreateCall(printfFunc, printfArgs);
   } else {
 
     llvm::Function *func = module->getFunction(this->name);
@@ -525,7 +546,7 @@ llvm::Value *AST_FunctionCall::codegen(
       }
     }
 
-    builder->CreateCall(func, funcArgs);
+    return builder->CreateCall(func, funcArgs);
   }
 
   return nullptr;

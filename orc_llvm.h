@@ -14,7 +14,7 @@ public:
 
   void exec(AST_Node *ast);
   void module_init();
-  void generate_binary(std::string filename);
+  void generate_binary(AST_Node *ast, std::string filename);
 
 private:
   std::unique_ptr<std::map<std::string, VariableDefinition>> variables;

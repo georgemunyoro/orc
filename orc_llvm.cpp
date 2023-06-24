@@ -1,7 +1,18 @@
 #include "orc_llvm.h"
 #include "ast.h"
 #include <cassert>
+#include <cstdlib>
+#include <fstream>
+#include <iostream>
+#include <llvm-14/llvm/Support/raw_ostream.h>
 #include <memory>
+
+#include <llvm/CodeGen/MachineFunction.h>
+#include <llvm/CodeGen/TargetSubtargetInfo.h>
+#include <llvm/MC/MCStreamer.h>
+#include <llvm/Support/FileSystem.h>
+#include <llvm/Support/TargetSelect.h>
+#include <llvm/Target/TargetMachine.h>
 
 void OrcLLVM::exec(AST_Node *ast) {
   printf("\n--- Generated AST ---\n");
@@ -13,10 +24,6 @@ void OrcLLVM::exec(AST_Node *ast) {
     std::cout << "One of the LLVM objects was not properly initialized.\n";
     return;
   }
-
-  // --
-
-  printf("\n\n--- DEBUG ---\n");
 
   std::vector<llvm::Type *> printf_arg_types;
   printf_arg_types.push_back(
@@ -35,8 +42,6 @@ void OrcLLVM::exec(AST_Node *ast) {
                this->variables);
   }
 
-  // --
-
   printf("\n\n--- Generated IR ---\n");
   this->llvm_mod->print(llvm::outs(), nullptr);
 }
@@ -49,6 +54,18 @@ void OrcLLVM::module_init() {
       std::make_unique<std::map<std::string, VariableDefinition>>();
 }
 
-void OrcLLVM::generate_binary(std::string filename) {
-  std::cout << "Generating binary!" << std::endl;
+void OrcLLVM::generate_binary(AST_Node *ast, std::string filename) {
+  this->exec(ast);
+
+  std::string output_ir_str;
+  llvm::raw_string_ostream rso(output_ir_str);
+  this->llvm_mod->print(rso, nullptr);
+  rso.flush();
+
+  std::ofstream output_f_stream("out.ll");
+  output_f_stream << output_ir_str;
+  output_f_stream.close();
+
+  std::system("llc -filetype=obj out.ll -o out.o");
+  std::system("clang -no-pie out.o -o a.out");
 }
