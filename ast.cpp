@@ -2,6 +2,8 @@
 #include <cstddef>
 #include <cstdlib>
 #include <iostream>
+#include <llvm-14/llvm/IR/BasicBlock.h>
+#include <llvm-14/llvm/IR/InstrTypes.h>
 #include <string>
 #include <vector>
 
@@ -70,7 +72,6 @@ llvm::Value *AST_VariableDeclaration::codegen(
       TODO: There is definitely a more correct way to this.
     */
     if (this->value->get_type() == AST_NODE_STRING_LITERAL) {
-
       std::string str_value = ((AST_StringLiteral *)this->value)->value;
       llvm::Type *stringType = llvm::ArrayType::get(
           llvm::IntegerType::get(*context, 8), str_value.length() + 1);
@@ -225,6 +226,11 @@ llvm::Value *AST_Block::codegen(
     std::unique_ptr<llvm::LLVMContext> &context,
     std::unique_ptr<llvm::Module> &module,
     std::unique_ptr<std::map<std::string, VariableDefinition>> &variables) {
+
+  for (auto n : this->nodes) {
+    n->codegen(builder, context, module, variables);
+  }
+
   return nullptr;
 }
 
@@ -331,18 +337,20 @@ llvm::Value *AST_FunctionDefinition::codegen(
     auto arg = this->args.at(i);
     if (arg->type == "string") {
       func_arg_types.push_back(builder->getInt8PtrTy());
+      (*variables)[arg->name] =
+          VariableDefinition(nullptr, builder->getInt8PtrTy(), true);
     } else if (arg->type == "int") {
       func_arg_types.push_back(builder->getInt32Ty());
+      (*variables)[arg->name] =
+          VariableDefinition(nullptr, builder->getInt8PtrTy(), true);
     }
   }
 
   llvm::FunctionType *funcType = llvm::FunctionType::get(
       get_type_from_t_name(this->return_type, context), func_arg_types, false);
 
-  llvm::Function *func = nullptr;
-
-  func = llvm::Function::Create(funcType, llvm::Function::ExternalLinkage,
-                                this->name, *module);
+  llvm::Function *func = llvm::Function::Create(
+      funcType, llvm::Function::ExternalLinkage, this->name, *module);
 
   if (func == nullptr) {
     std::cout << "Error ocurred while defining function `" << this->name
@@ -352,8 +360,7 @@ llvm::Value *AST_FunctionDefinition::codegen(
 
   for (int i = 0; i < args.size(); ++i) {
     auto arg = this->args.at(i);
-    (*variables)[arg->name] = VariableDefinition(
-        func->getArg(i), func->getArg(i)->getParamInAllocaType(), true);
+    (*variables)[arg->name].v_value = func->getArg(i);
   }
 
   llvm::BasicBlock *func_block =
@@ -434,8 +441,6 @@ llvm::Value *AST_FunctionCall::codegen(
     exit(1);
   }
 
-  printf("ASSKDJADKJASDKJ %s\n", this->name.c_str());
-
   if (this->name == "printf") {
     llvm::Value *val =
         this->args.at(0)->codegen(builder, context, module, variables);
@@ -484,7 +489,6 @@ llvm::Value *AST_FunctionCall::codegen(
             cast<llvm::ConstantDataArray>(arg_val)->getAsString());
         printfArgs.push_back(arg_str);
       } else {
-
         printfArgs.push_back(arg_val);
       }
     }
@@ -496,9 +500,6 @@ llvm::Value *AST_FunctionCall::codegen(
     std::vector<llvm::Value *> funcArgs;
 
     for (int i = 0; i < this->args.size(); ++i) {
-      printf("ARGUMENT\n");
-      this->args.at(i)->print();
-
       if (this->args.at(i)->get_type() == AST_NODE_EOF)
         break;
 
@@ -515,6 +516,7 @@ llvm::Value *AST_FunctionCall::codegen(
 
       if ((is_pointer_to_i8 || is_array_of_i8) &&
           this->args.at(i)->get_type() != AST_NODE_VARIABLE_REFERENCE) {
+
         llvm::Value *arg_str = builder->CreateGlobalStringPtr(
             cast<llvm::ConstantDataArray>(arg_val)->getAsString());
         funcArgs.push_back(arg_str);
@@ -546,35 +548,80 @@ llvm::Value *AST_BinaryOperation::codegen(
     std::unique_ptr<llvm::Module> &module,
     std::unique_ptr<std::map<std::string, VariableDefinition>> &variables) {
 
-  if (this->op == "+") {
-    return builder->CreateAdd(
-        this->left->codegen(builder, context, module, variables),
-        this->right->codegen(builder, context, module, variables));
+  auto lhs = this->left->codegen(builder, context, module, variables);
+  auto rhs = this->right->codegen(builder, context, module, variables);
+
+  if (this->op == "+")
+    return builder->CreateAdd(lhs, rhs);
+
+  if (this->op == "-")
+    return builder->CreateSub(lhs, rhs);
+
+  if (this->op == "*")
+    return builder->CreateMul(lhs, rhs);
+
+  if (this->op == "/")
+    return builder->CreateSDiv(lhs, rhs);
+
+  if (this->op == "%")
+    return builder->CreateSRem(lhs, rhs);
+
+  if (this->op == ">")
+    return builder->CreateICmpSGT(lhs, rhs);
+
+  if (this->op == "<")
+    return builder->CreateICmpSLT(lhs, rhs);
+
+  return nullptr;
+}
+
+/* AST_Conditional */
+
+void AST_Conditional::print(int indent) {
+  printf("%sConditional(\n", boom_utils::indent_string(indent).c_str());
+  this->condition->print(indent + 1);
+  this->onTrue->print(indent + 1);
+  if (this->onFalse != nullptr) {
+    this->onFalse->print(indent + 1);
+  }
+  printf("%s)\n", boom_utils::indent_string(indent).c_str());
+}
+
+llvm::Value *AST_Conditional::codegen(
+    std::unique_ptr<llvm::IRBuilder<>> &builder,
+    std::unique_ptr<llvm::LLVMContext> &context,
+    std::unique_ptr<llvm::Module> &module,
+    std::unique_ptr<std::map<std::string, VariableDefinition>> &variables) {
+
+  llvm::Value *Cond = this->condition->nodes.at(0)->codegen(builder, context,
+                                                            module, variables);
+  if (Cond == nullptr) {
+    printf("Error generating conditional.\n");
+    exit(1);
   }
 
-  if (this->op == "-") {
-    return builder->CreateSub(
-        this->left->codegen(builder, context, module, variables),
-        this->right->codegen(builder, context, module, variables));
-  }
+  llvm::Function *TheFunction = builder->GetInsertBlock()->getParent();
 
-  if (this->op == "*") {
-    return builder->CreateMul(
-        this->left->codegen(builder, context, module, variables),
-        this->right->codegen(builder, context, module, variables));
-  }
+  llvm::BasicBlock *OnTrueBB =
+      llvm::BasicBlock::Create(*context, "then", TheFunction);
+  llvm::BasicBlock *OnFalseBB = llvm::BasicBlock::Create(*context, "else");
+  llvm::BasicBlock *MergeBB = llvm::BasicBlock::Create(*context, "ifcont");
 
-  if (this->op == "/") {
-    return builder->CreateSDiv(
-        this->left->codegen(builder, context, module, variables),
-        this->right->codegen(builder, context, module, variables));
-  }
+  builder->CreateCondBr(Cond, OnTrueBB, OnFalseBB);
+  builder->SetInsertPoint(OnTrueBB);
+  this->onTrue->codegen(builder, context, module, variables);
 
-  if (this->op == "%") {
-    return builder->CreateSRem(
-        this->left->codegen(builder, context, module, variables),
-        this->right->codegen(builder, context, module, variables));
-  }
+  builder->CreateBr(MergeBB);
+  OnTrueBB = builder->GetInsertBlock();
+
+  TheFunction->getBasicBlockList().push_back(OnFalseBB);
+  builder->SetInsertPoint(OnFalseBB);
+  this->onFalse->codegen(builder, context, module, variables);
+  builder->CreateBr(MergeBB);
+  OnFalseBB = builder->GetInsertBlock();
+
+  TheFunction->getBasicBlockList().push_back(MergeBB);
+  builder->SetInsertPoint(MergeBB);
 
   return nullptr;
 }

@@ -6,10 +6,10 @@
 
 #include "ast.h"
 #include "lexer.h"
+#include "orc_llvm.h"
 #include "parser.h"
 #include "token.h"
 #include "utils.h"
-#include "orc_llvm.h"
 
 int main() {
   std::string source;
@@ -21,7 +21,8 @@ int main() {
   AST_Node *ast = parser.parse();
 
   OrcLLVM olm;
-  olm.exec(ast);
+  // olm.exec(ast);
+  olm.generate_binary("a.out");
 
   return 0;
 }

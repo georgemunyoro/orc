@@ -48,3 +48,7 @@ void OrcLLVM::module_init() {
   this->variables =
       std::make_unique<std::map<std::string, VariableDefinition>>();
 }
+
+void OrcLLVM::generate_binary(std::string filename) {
+  std::cout << "Generating binary!" << std::endl;
+}

@@ -22,7 +22,8 @@ enum AST_Node_Type {
   AST_FUNCTION_DEFINITION,
   AST_FUNCTION_CALL,
   AST_BINARY_OPERATION,
-  AST_FUNCTION_ARGUMENT
+  AST_FUNCTION_ARGUMENT,
+  AST_CONDITIONAL
 };
 
 struct VariableDefinition {
@@ -271,4 +272,27 @@ public:
   std::string op;
   AST_Node *left;
   AST_Node *right;
+};
+
+class AST_Conditional : public AST_Node {
+public:
+  AST_Conditional(AST_Block *condition, AST_Block *onTrue)
+      : condition(condition), onTrue(onTrue), onFalse(nullptr) {}
+
+  AST_Conditional(AST_Block *condition, AST_Block *onTrue, AST_Block *onFalse)
+      : condition(condition), onTrue(onTrue), onFalse(onFalse) {}
+
+  virtual AST_Node_Type get_type() override { return AST_CONDITIONAL; };
+  void print(int indent = 0) override;
+
+  llvm::Value *
+  codegen(std::unique_ptr<llvm::IRBuilder<>> &builder,
+          std::unique_ptr<llvm::LLVMContext> &context,
+          std::unique_ptr<llvm::Module> &module,
+          std::unique_ptr<std::map<std::string, VariableDefinition>> &variables)
+      override;
+
+  AST_Block *condition;
+  AST_Block *onTrue;
+  AST_Block *onFalse;
 };

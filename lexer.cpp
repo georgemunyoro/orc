@@ -5,8 +5,6 @@ std::vector<Token> Lexer::lex() {
   for (char c : this->source) {
     this->buffer += c;
 
-    // printf("C: %3c B: %s\n", c, this->buffer.c_str());
-
     if (this->in_string) {
       this->handle_string_char(c);
       continue;
@@ -121,6 +119,23 @@ std::vector<Token> Lexer::lex() {
 }
 
 bool Lexer::handle_string_char(char c) {
+  if (this->buffer[this->buffer.length() - 2] == '\\') {
+    if (c == 'n')
+      this->buffer = this->buffer.substr(0, this->buffer.length() - 2) + '\n';
+
+    if (c == 'r')
+      this->buffer = this->buffer.substr(0, this->buffer.length() - 2) + '\r';
+
+    if (c == 't')
+      this->buffer = this->buffer.substr(0, this->buffer.length() - 2) + '\t';
+
+    if (c == 'v')
+      this->buffer = this->buffer.substr(0, this->buffer.length() - 2) + '\v';
+
+    if (c == '\\')
+      this->buffer = this->buffer.substr(0, this->buffer.length() - 2) + '\\';
+  }
+
   if (c != this->in_string_type)
     return false;
 

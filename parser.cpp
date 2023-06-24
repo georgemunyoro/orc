@@ -119,7 +119,6 @@ AST_VariableDeclaration *Parser::parse_variable_declaration() {
 
   std::string v_type = "";
   for (Token t : v_type_tokens) {
-    std::cout << t.value << "\n" << std::endl;
     v_type += t.value;
   }
 
@@ -154,13 +153,24 @@ Parser::parse_binary_operation(std::vector<Token>::iterator op,
                                std::vector<Token>::iterator end_of_op) {
   AST_BinaryOperation *bin_op = new AST_BinaryOperation("", nullptr, nullptr);
 
-  std::cout << "---\n";
-  for (auto i = tokens->begin() + this->cursor - 1; i != end_of_op; ++i) {
-    std::cout << i->value << std::endl;
-  }
-  std::cout << "---\n";
-
   return bin_op;
+}
+
+AST_Conditional *Parser::parse_conditional() {
+  ++this->cursor;
+  AST_Block *condition = (AST_Block *)this->parse_expr();
+  AST_Block *onTrueBlock = (AST_Block *)this->parse_expr();
+  AST_Block *onFalseBlock = nullptr;
+
+  std::cout << current_token()->value << std::endl;
+  if (current_token()->value == "else") {
+    ++this->cursor;
+    onFalseBlock = (AST_Block *)this->parse_expr();
+  }
+
+  AST_Conditional *conditional =
+      new AST_Conditional(condition, onTrueBlock, onFalseBlock);
+  return conditional;
 }
 
 AST_Node *Parser::parse_expr() {
@@ -179,6 +189,8 @@ AST_Node *Parser::parse_expr() {
       return this->parse_variable_assignment();
     } else if (token->value == "func") {
       return this->parse_function_definition();
+    } else if (token->value == "if") {
+      return this->parse_conditional();
     } else if (this->peek_next_token()->id == TOKEN_PAREN_OPEN) {
       return this->parse_function_call();
     } else {
