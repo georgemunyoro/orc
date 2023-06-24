@@ -242,6 +242,8 @@ public:
   ~AST_FunctionCall();
   void print(int indent = 0) override;
 
+  AST_Node_Type get_type() override { return AST_FUNCTION_CALL; }
+
   llvm::Value *
   codegen(std::unique_ptr<llvm::IRBuilder<>> &builder,
           std::unique_ptr<llvm::LLVMContext> &context,
@@ -296,3 +298,5 @@ public:
   AST_Block *onTrue;
   AST_Block *onFalse;
 };
+
+bool does_block_end_in_return(AST_Block *block);

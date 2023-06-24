@@ -227,11 +227,15 @@ llvm::Value *AST_Block::codegen(
     std::unique_ptr<llvm::Module> &module,
     std::unique_ptr<std::map<std::string, VariableDefinition>> &variables) {
 
+  llvm::Value *last = nullptr;
+
   for (auto n : this->nodes) {
-    n->codegen(builder, context, module, variables);
+    if (n->get_type() == AST_NODE_EOF)
+      continue;
+    last = n->codegen(builder, context, module, variables);
   }
 
-  return nullptr;
+  return last;
 }
 
 /* AST_IntegerLiteral */
@@ -614,8 +618,9 @@ llvm::Value *AST_Conditional::codegen(
     std::unique_ptr<llvm::Module> &module,
     std::unique_ptr<std::map<std::string, VariableDefinition>> &variables) {
 
-  llvm::Value *Cond = this->condition->nodes.at(0)->codegen(builder, context,
-                                                            module, variables);
+  llvm::Value *Cond =
+      this->condition->codegen(builder, context, module, variables);
+
   if (Cond == nullptr) {
     printf("Error generating conditional.\n");
     exit(1);
@@ -632,17 +637,44 @@ llvm::Value *AST_Conditional::codegen(
   builder->SetInsertPoint(OnTrueBB);
   this->onTrue->codegen(builder, context, module, variables);
 
-  builder->CreateBr(MergeBB);
+  bool onTrueHasReturn = does_block_end_in_return(this->onTrue);
+  bool onFalseHasReturn = does_block_end_in_return(this->onFalse);
+
+  // If the block has a return statement in it, dont create the branch.
+  if (!onTrueHasReturn)
+    builder->CreateBr(MergeBB);
+
   OnTrueBB = builder->GetInsertBlock();
 
   TheFunction->getBasicBlockList().push_back(OnFalseBB);
   builder->SetInsertPoint(OnFalseBB);
   this->onFalse->codegen(builder, context, module, variables);
-  builder->CreateBr(MergeBB);
+
+  // If the block has a return statement in it, dont create the branch.
+  if (!onFalseHasReturn)
+    builder->CreateBr(MergeBB);
+
   OnFalseBB = builder->GetInsertBlock();
 
-  TheFunction->getBasicBlockList().push_back(MergeBB);
+  if (!(onTrueHasReturn && onFalseHasReturn)) {
+    TheFunction->getBasicBlockList().push_back(MergeBB);
+  }
+
   builder->SetInsertPoint(MergeBB);
 
   return nullptr;
+}
+
+bool does_block_end_in_return(AST_Block *block) {
+  if (block->nodes.size() < 2)
+    return false;
+
+  auto last_non_eof_node = block->nodes.at(block->nodes.size() - 2);
+
+  if (last_non_eof_node->get_type() != AST_FUNCTION_CALL)
+    return false;
+
+  AST_FunctionCall *f_call = ((AST_FunctionCall *)last_non_eof_node);
+
+  return f_call->name == "return";
 }
