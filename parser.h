@@ -24,6 +24,7 @@ private:
   AST_FunctionDefinition *parse_function_definition();
   AST_FunctionCall *parse_function_call();
   AST_Conditional *parse_conditional();
+  AST_Loop *parse_while_loop();
   AST_BinaryOperation *
   parse_binary_operation(std::vector<Token>::iterator op,
                          std::vector<Token>::iterator end_of_op);

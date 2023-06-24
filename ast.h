@@ -23,7 +23,8 @@ enum AST_Node_Type {
   AST_FUNCTION_CALL,
   AST_BINARY_OPERATION,
   AST_FUNCTION_ARGUMENT,
-  AST_CONDITIONAL
+  AST_CONDITIONAL,
+  AST_LOOP
 };
 
 struct VariableDefinition {
@@ -297,6 +298,25 @@ public:
   AST_Block *condition;
   AST_Block *onTrue;
   AST_Block *onFalse;
+};
+
+class AST_Loop : public AST_Node {
+public:
+  AST_Loop(AST_Block *condition, AST_Block *expression)
+      : condition(condition), expression(expression) {}
+
+  void print(int indent = 0) override;
+  virtual AST_Node_Type get_type() override { return AST_LOOP; };
+
+  llvm::Value *
+  codegen(std::unique_ptr<llvm::IRBuilder<>> &builder,
+          std::unique_ptr<llvm::LLVMContext> &context,
+          std::unique_ptr<llvm::Module> &module,
+          std::unique_ptr<std::map<std::string, VariableDefinition>> &variables)
+      override;
+
+  AST_Block *condition;
+  AST_Block *expression;
 };
 
 bool does_block_end_in_return(AST_Block *block);

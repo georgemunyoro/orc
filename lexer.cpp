@@ -1,4 +1,5 @@
 #include "lexer.h"
+#include "token.h"
 #include "utils.h"
 
 std::vector<Token> Lexer::lex() {
@@ -89,7 +90,12 @@ std::vector<Token> Lexer::lex() {
       this->push_token(TOKEN_OPERATOR_MODULO, "%");
       break;
     case '=':
-      this->push_token(TOKEN_OPERATOR_EQUALS, "=");
+      if (this->tokens.back().id == TOKEN_OPERATOR_EQUALS) {
+        this->tokens.pop_back();
+        this->push_token(TOKEN_OPERATOR_IS_EQUALS, "==");
+      } else {
+        this->push_token(TOKEN_OPERATOR_EQUALS, "=");
+      }
       break;
 
     default:

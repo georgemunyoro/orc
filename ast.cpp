@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <llvm-14/llvm/IR/BasicBlock.h>
+#include <llvm-14/llvm/IR/DerivedTypes.h>
 #include <llvm-14/llvm/IR/InstrTypes.h>
 #include <string>
 #include <vector>
@@ -56,6 +57,31 @@ llvm::Value *AST_VariableDeclaration::codegen(
     std::unique_ptr<llvm::LLVMContext> &context,
     std::unique_ptr<llvm::Module> &module,
     std::unique_ptr<std::map<std::string, VariableDefinition>> &variables) {
+
+  if (this->value->get_type() == AST_NODE_BLOCK) {
+
+    AST_Block *block = ((AST_Block *)this->value);
+
+    if (this->type == "int[]") {
+      llvm::ArrayType *IntArray =
+          llvm::ArrayType::get(builder->getInt32Ty(), block->nodes.size() - 1);
+      llvm::Value *arr = builder->CreateAlloca(IntArray, 0, this->name);
+
+      for (int i = 0; i < block->nodes.size() - 1; ++i) {
+        llvm::Value *ptr = builder->CreateGEP(
+            IntArray, arr, {builder->getInt32(0), builder->getInt32(i)});
+
+        builder->CreateStore(
+            block->nodes.at(i)->codegen(builder, context, module, variables),
+            ptr);
+      }
+
+      (*variables)[this->name] = VariableDefinition(arr, IntArray);
+      return arr;
+    }
+
+    return nullptr;
+  }
 
   if (this->value->get_type() == AST_NODE_INTEGER_LITERAL ||
       this->value->get_type() == AST_NODE_STRING_LITERAL) {
@@ -126,6 +152,10 @@ llvm::Value *AST_VariableReference::codegen(
 
   VariableDefinition var_def = (*variables)[this->name];
 
+  if (var_def.v_type->isArrayTy()) {
+    return var_def.v_value;
+  }
+
   if (var_def.v_type->isPointerTy() || var_def.is_func_arg) {
     return var_def.v_value;
   }
@@ -192,14 +222,7 @@ llvm::Value *AST_VariableAssignment::codegen(
     exit(1);
   }
 
-  // Allocate a variable of the type with the given value
-  llvm::AllocaInst *alloca =
-      builder->CreateAlloca(val->getType(), 0, this->name);
-
-  // Update the variable map to point to the new value
-  (*variables)[this->name] = VariableDefinition(alloca, val->getType());
-
-  return builder->CreateStore(val, alloca);
+  return builder->CreateStore(val, (*variables)[this->name].v_value);
 }
 
 /* AST_Block */
@@ -286,7 +309,7 @@ AST_StringLiteral::~AST_StringLiteral() {}
 
 void AST_StringLiteral::print(int indent) {
   printf("%sStringLiteral(%s)\n", boom_utils::indent_string(indent).c_str(),
-         this->value.c_str());
+         boom_utils::trim_string(this->value).c_str());
 }
 
 llvm::Value *AST_StringLiteral::codegen(
@@ -597,6 +620,23 @@ llvm::Value *AST_BinaryOperation::codegen(
   if (this->op == "<")
     return builder->CreateICmpSLT(lhs, rhs);
 
+  if (this->op == "==")
+    return builder->CreateICmpEQ(lhs, rhs);
+
+  if (this->op == "index") {
+    std::vector<llvm::Value *> indices(2);
+    indices[0] = builder->getInt32(0);
+    indices[1] = rhs;
+
+    llvm::Value *elementPtr = builder->CreateInBoundsGEP(
+        lhs->getType()->getPointerElementType(), lhs, indices, "elementPtr");
+    llvm::Value *elementValue = builder->CreateLoad(
+        lhs->getType()->getPointerElementType()->getArrayElementType(),
+        elementPtr);
+
+    return elementValue;
+  }
+
   return nullptr;
 }
 
@@ -677,4 +717,45 @@ bool does_block_end_in_return(AST_Block *block) {
   AST_FunctionCall *f_call = ((AST_FunctionCall *)last_non_eof_node);
 
   return f_call->name == "return";
+}
+
+/* AST_Loop */
+
+void AST_Loop::print(int indent) {
+  printf("%sLoop(\n", boom_utils::indent_string(indent).c_str());
+  this->condition->print(indent + 1);
+  this->expression->print(indent + 1);
+  printf("%s)\n", boom_utils::indent_string(indent).c_str());
+}
+
+llvm::Value *AST_Loop::codegen(
+    std::unique_ptr<llvm::IRBuilder<>> &builder,
+    std::unique_ptr<llvm::LLVMContext> &context,
+    std::unique_ptr<llvm::Module> &module,
+    std::unique_ptr<std::map<std::string, VariableDefinition>> &variables) {
+
+  llvm::Function *TheFunction = builder->GetInsertBlock()->getParent();
+
+  llvm::BasicBlock *CondBB =
+      llvm::BasicBlock::Create(*context, "whilecond", TheFunction);
+  llvm::BasicBlock *LoopBB =
+      llvm::BasicBlock::Create(*context, "loopbody", TheFunction);
+  llvm::BasicBlock *EndBB = llvm::BasicBlock::Create(*context, "loopend");
+
+  builder->CreateBr(CondBB);
+  builder->SetInsertPoint(CondBB);
+
+  llvm::Value *Cond =
+      this->condition->codegen(builder, context, module, variables);
+
+  builder->CreateCondBr(Cond, LoopBB, EndBB);
+
+  builder->SetInsertPoint(LoopBB);
+  this->expression->codegen(builder, context, module, variables);
+  builder->CreateBr(CondBB);
+
+  TheFunction->getBasicBlockList().push_back(EndBB);
+  builder->SetInsertPoint(EndBB);
+
+  return nullptr;
 }

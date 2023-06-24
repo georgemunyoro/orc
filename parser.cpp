@@ -172,6 +172,14 @@ AST_Conditional *Parser::parse_conditional() {
   return conditional;
 }
 
+AST_Loop *Parser::parse_while_loop() {
+  ++this->cursor;
+  AST_Block *condition = (AST_Block *)this->parse_expr();
+  AST_Block *expression = (AST_Block *)this->parse_expr();
+  AST_Loop *loop = new AST_Loop(condition, expression);
+  return loop;
+}
+
 AST_Node *Parser::parse_expr() {
   Token *token = this->current_token();
 
@@ -190,6 +198,8 @@ AST_Node *Parser::parse_expr() {
       return this->parse_function_definition();
     } else if (token->value == "if") {
       return this->parse_conditional();
+    } else if (token->value == "while") {
+      return this->parse_while_loop();
     } else if (this->peek_next_token()->id == TOKEN_PAREN_OPEN) {
       return this->parse_function_call();
     } else {
@@ -201,6 +211,16 @@ AST_Node *Parser::parse_expr() {
         bin_op->right = this->parse_expr();
         return bin_op;
       }
+
+      if (current_token()->id == TOKEN_BRACKET_OPEN) {
+        AST_BinaryOperation *bin_op =
+            new AST_BinaryOperation("index", var_ref, nullptr);
+        ++this->cursor;
+        bin_op->right = this->parse_expr();
+        ++this->cursor;
+        return bin_op;
+      }
+
       return var_ref;
     }
   }
