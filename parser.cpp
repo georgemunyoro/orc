@@ -215,6 +215,15 @@ AST_Node *Parser::parse_expr() {
       if (node->get_type() == AST_NODE_EOF)
         break;
     }
+
+    if (current_token()->id >= TOKEN_OPERATOR_PLUS) {
+      AST_BinaryOperation *bin_op =
+          new AST_BinaryOperation(current_token()->value, block, nullptr);
+      ++this->cursor;
+      bin_op->right = this->parse_expr();
+      return bin_op;
+    }
+
     return block;
   }
 
