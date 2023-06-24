@@ -1,6 +1,9 @@
+#include <algorithm>
 #include <cstdint>
 #include <cstdio>
 #include <iostream>
+#include <iterator>
+#include <vector>
 
 #include "ast.h"
 #include "parser.h"
@@ -25,18 +28,16 @@ AST_Node *Parser::parse() {
       break;
   }
 
-  std::string f_name = "main";
-  std::vector<AST_FunctionArgument *> f_args;
-  return new AST_FunctionDefinition(f_name, f_args, ast);
+  return ast;
 }
 
 AST_FunctionDefinition *Parser::parse_function_definition() {
-  this->cursor += 1;
+  ++this->cursor;
   std::string f_name = this->current_token()->value;
 
-  this->cursor += 1;
+  ++this->cursor;
   std::vector<AST_FunctionArgument *> f_args;
-  this->cursor += 1;
+  ++this->cursor;
 
   if (this->current_token()->id == TOKEN_PAREN_CLOSE) {
     this->cursor += 1;
@@ -57,6 +58,9 @@ AST_FunctionDefinition *Parser::parse_function_definition() {
     }
   }
 
+  std::string f_type = this->current_token()->value;
+  ++this->cursor;
+
   AST_Node *f_block = this->parse_expr();
 
   if (f_block->get_type() != AST_NODE_BLOCK) {
@@ -64,7 +68,8 @@ AST_FunctionDefinition *Parser::parse_function_definition() {
     exit(1);
   }
 
-  return new AST_FunctionDefinition(f_name, f_args, (AST_Block *)f_block);
+  return new AST_FunctionDefinition(f_name, f_args, f_type,
+                                    (AST_Block *)f_block);
 }
 
 AST_FunctionCall *Parser::parse_function_call() {
@@ -99,11 +104,11 @@ AST_VariableDeclaration *Parser::parse_variable_declaration() {
     Token t = this->tokens->at(i);
 
     if (t.id == TOKEN_OPERATOR_EQUALS) {
-      v_name = this->tokens->at(i - 1).value;
+      v_name = this->tokens->at(this->cursor + 1).value;
       eq_sign_pos = i;
       v_type_tokens =
-          std::vector<Token>(this->tokens->begin() + this->cursor + 1,
-                             this->tokens->begin() + (i - 1));
+          std::vector<Token>(this->tokens->begin() + this->cursor + 2,
+                             this->tokens->begin() + (i));
     }
 
     if (t.id == TOKEN_SEMICOLON) {
@@ -114,6 +119,7 @@ AST_VariableDeclaration *Parser::parse_variable_declaration() {
 
   std::string v_type = "";
   for (Token t : v_type_tokens) {
+    std::cout << t.value << "\n" << std::endl;
     v_type += t.value;
   }
 
@@ -143,6 +149,20 @@ AST_VariableReference *Parser::parse_variable_reference() {
   return new AST_VariableReference(token->value);
 }
 
+AST_BinaryOperation *
+Parser::parse_binary_operation(std::vector<Token>::iterator op,
+                               std::vector<Token>::iterator end_of_op) {
+  AST_BinaryOperation *bin_op = new AST_BinaryOperation("", nullptr, nullptr);
+
+  std::cout << "---\n";
+  for (auto i = tokens->begin() + this->cursor - 1; i != end_of_op; ++i) {
+    std::cout << i->value << std::endl;
+  }
+  std::cout << "---\n";
+
+  return bin_op;
+}
+
 AST_Node *Parser::parse_expr() {
   Token *token = this->current_token();
 
@@ -162,7 +182,15 @@ AST_Node *Parser::parse_expr() {
     } else if (this->peek_next_token()->id == TOKEN_PAREN_OPEN) {
       return this->parse_function_call();
     } else {
-      return this->parse_variable_reference();
+      auto var_ref = this->parse_variable_reference();
+      if (current_token()->id >= TOKEN_OPERATOR_PLUS) {
+        AST_BinaryOperation *bin_op =
+            new AST_BinaryOperation(current_token()->value, var_ref, nullptr);
+        ++this->cursor;
+        bin_op->right = this->parse_expr();
+        return bin_op;
+      }
+      return var_ref;
     }
   }
 
@@ -203,13 +231,32 @@ AST_Node *Parser::parse_expr() {
   }
 
   if (token->id == TOKEN_NUMBER) {
+
     if (token->value.find(".") != std::string::npos) {
       AST_FloatLiteral *f_node = new AST_FloatLiteral(token->value);
-      this->cursor++;
+      ++this->cursor;
+
+      if (current_token()->id >= TOKEN_OPERATOR_PLUS) {
+        AST_BinaryOperation *bin_op =
+            new AST_BinaryOperation(current_token()->value, f_node, nullptr);
+        ++this->cursor;
+        bin_op->right = this->parse_expr();
+        return bin_op;
+      }
+
       return f_node;
     } else {
       AST_IntegerLiteral *i_node = new AST_IntegerLiteral(token->value);
-      this->cursor++;
+      ++this->cursor;
+
+      if (current_token()->id >= TOKEN_OPERATOR_PLUS) {
+        AST_BinaryOperation *bin_op =
+            new AST_BinaryOperation(current_token()->value, i_node, nullptr);
+        ++this->cursor;
+        bin_op->right = this->parse_expr();
+        return bin_op;
+      }
+
       return i_node;
     }
   }

@@ -23,6 +23,9 @@ private:
   AST_VariableReference *parse_variable_reference();
   AST_FunctionDefinition *parse_function_definition();
   AST_FunctionCall *parse_function_call();
+  AST_BinaryOperation *
+  parse_binary_operation(std::vector<Token>::iterator op,
+                         std::vector<Token>::iterator end_of_op);
 
   Token *current_token();
   Token *peek_next_token();

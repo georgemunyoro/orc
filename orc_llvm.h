@@ -1,5 +1,8 @@
 #pragma once
 
+#include <map>
+#include <memory>
+
 #include "ast.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/LLVMContext.h"
@@ -13,6 +16,7 @@ public:
   void module_init();
 
 private:
+  std::unique_ptr<std::map<std::string, VariableDefinition>> variables;
   std::unique_ptr<llvm::LLVMContext> llvm_ctx;
   std::unique_ptr<llvm::Module> llvm_mod;
   std::unique_ptr<llvm::IRBuilder<>> llvm_builder;
