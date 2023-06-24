@@ -279,7 +279,7 @@ public:
 class AST_Conditional : public AST_Node {
 public:
   AST_Conditional(AST_Block *condition, AST_Block *onTrue)
-      : condition(condition), onTrue(onTrue), onFalse(nullptr) {}
+      : condition(condition), onTrue(onTrue), onFalse(new AST_Block()) {}
 
   AST_Conditional(AST_Block *condition, AST_Block *onTrue, AST_Block *onFalse)
       : condition(condition), onTrue(onTrue), onFalse(onFalse) {}

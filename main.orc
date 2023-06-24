@@ -2,9 +2,9 @@
 func add(a int, b int) int {
     if ((a + b) > 100) {
         return(100);
-    } else {
-        return(a + b);
     }
+
+    return(a + b);
 }
 
 func main() void {
