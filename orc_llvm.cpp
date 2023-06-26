@@ -4,7 +4,7 @@
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
-#include <llvm-14/llvm/Support/raw_ostream.h>
+#include <llvm/Support/raw_ostream.h>
 #include <memory>
 
 #include <llvm/CodeGen/MachineFunction.h>

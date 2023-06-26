@@ -29,13 +29,22 @@ enum AST_Node_Type {
 
 struct VariableDefinition {
   VariableDefinition() : v_value(nullptr), v_type(nullptr) {}
+
   VariableDefinition(llvm::Value *v_value, llvm::Type *v_type)
       : v_value(v_value), v_type(v_type) {}
+
   VariableDefinition(llvm::Value *v_value, llvm::Type *v_type, bool is_func_arg)
       : v_value(v_value), v_type(v_type), is_func_arg(is_func_arg) {}
+
+  VariableDefinition(llvm::StructType *s_type)
+      : s_type(s_type), is_struct(true) {}
+
   llvm::Value *v_value;
   llvm::Type *v_type;
+  llvm::StructType *s_type;
   bool is_func_arg = false;
+  bool is_struct = false;
+  std::map<std::string, int> struct_field_map;
 };
 
 class AST_Node {
@@ -137,7 +146,11 @@ public:
           std::unique_ptr<std::map<std::string, VariableDefinition>> &variables)
       override;
 
+  std::string block_type = "";
+  std::string block_name = "";
+
   std::vector<AST_Node *> nodes;
+  bool might_be_array = true;
 };
 
 class AST_IntegerLiteral : public AST_Node {
@@ -320,3 +333,6 @@ public:
 };
 
 bool does_block_end_in_return(AST_Block *block);
+llvm::Type *get_type_from_t_name(
+    std::string &t_name, std::unique_ptr<llvm::LLVMContext> &context,
+    std::unique_ptr<std::map<std::string, VariableDefinition>> &variables);

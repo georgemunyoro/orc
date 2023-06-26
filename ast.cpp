@@ -1,10 +1,11 @@
 #include <cassert>
 #include <cstddef>
+#include <cstdio>
 #include <cstdlib>
 #include <iostream>
-#include <llvm-14/llvm/IR/BasicBlock.h>
-#include <llvm-14/llvm/IR/DerivedTypes.h>
-#include <llvm-14/llvm/IR/InstrTypes.h>
+#include <llvm/IR/BasicBlock.h>
+#include <llvm/IR/DerivedTypes.h>
+#include <llvm/IR/InstrTypes.h>
 #include <string>
 #include <vector>
 
@@ -58,29 +59,62 @@ llvm::Value *AST_VariableDeclaration::codegen(
     std::unique_ptr<llvm::Module> &module,
     std::unique_ptr<std::map<std::string, VariableDefinition>> &variables) {
 
+  auto val = this->value->codegen(builder, context, module, variables);
+  // if (val->getType()->isArrayTy()) {
+  //   std::cout << this->name << " IS AN ARRAY" << std::endl;
+  //   (*variables)[this->name] = VariableDefinition();
+  //   (*variables)[this->name].v_value = val;
+  //   (*variables)[this->name].v_type = val->getType();
+  // }
+
+  /*
+    Struct variable declaration
+  */
+  if (this->value->get_type() == AST_FUNCTION_CALL) {
+    AST_FunctionCall *f_call = (AST_FunctionCall *)this->value;
+
+    if (val->getType()->getPointerElementType()->isStructTy()) {
+      llvm::Value *s_instance = val;
+
+      std::string s_name = boom_utils::trim_string(s_instance->getType()
+                                                       ->getPointerElementType()
+                                                       ->getStructName()
+                                                       .str());
+
+      (*variables)[this->name] = VariableDefinition();
+      (*variables)[this->name].v_value = s_instance;
+      (*variables)[this->name].s_type = (*variables)[s_name].s_type;
+
+      return s_instance;
+    }
+
+    if ((*variables).contains(f_call->name)) {
+      VariableDefinition stored_def = (*variables)[f_call->name];
+
+      if (stored_def.is_struct) {
+
+        llvm::Value *s_instance = val;
+
+        (*variables)[this->name] = VariableDefinition();
+        (*variables)[this->name].v_value = s_instance;
+        (*variables)[this->name].s_type = (*variables)[f_call->name].s_type;
+
+        return s_instance;
+      }
+    } else {
+      return this->value->codegen(builder, context, module, variables);
+    }
+  }
+
   if (this->value->get_type() == AST_NODE_BLOCK) {
 
     AST_Block *block = ((AST_Block *)this->value);
 
-    if (this->type == "int[]") {
-      llvm::ArrayType *IntArray =
-          llvm::ArrayType::get(builder->getInt32Ty(), block->nodes.size() - 1);
-      llvm::Value *arr = builder->CreateAlloca(IntArray, 0, this->name);
+    llvm::Value *val =
+        this->value->codegen(builder, context, module, variables);
 
-      for (int i = 0; i < block->nodes.size() - 1; ++i) {
-        llvm::Value *ptr = builder->CreateGEP(
-            IntArray, arr, {builder->getInt32(0), builder->getInt32(i)});
-
-        builder->CreateStore(
-            block->nodes.at(i)->codegen(builder, context, module, variables),
-            ptr);
-      }
-
-      (*variables)[this->name] = VariableDefinition(arr, IntArray);
-      return arr;
-    }
-
-    return nullptr;
+    (*variables)[this->name] = VariableDefinition(val, val->getType());
+    return val;
   }
 
   if (this->value->get_type() == AST_NODE_INTEGER_LITERAL ||
@@ -124,7 +158,6 @@ llvm::Value *AST_VariableDeclaration::codegen(
     return (*variables)[this->name].v_value;
   }
 
-  llvm::Value *val = this->value->codegen(builder, context, module, variables);
   llvm::AllocaInst *alloca =
       builder->CreateAlloca(val->getType(), 0, this->name);
   (*variables)[this->name] = VariableDefinition(alloca, val->getType());
@@ -152,11 +185,14 @@ llvm::Value *AST_VariableReference::codegen(
 
   VariableDefinition var_def = (*variables)[this->name];
 
-  if (var_def.v_type->isArrayTy()) {
+  if (var_def.s_type != nullptr && var_def.v_type == nullptr &&
+      !var_def.is_struct) {
     return var_def.v_value;
   }
 
-  if (var_def.v_type->isPointerTy() || var_def.is_func_arg) {
+  if (var_def.v_type->isPointerTy() || var_def.is_func_arg ||
+      var_def.v_type->isArrayTy()) {
+
     return var_def.v_value;
   }
 
@@ -216,6 +252,22 @@ llvm::Value *AST_VariableAssignment::codegen(
   VariableDefinition varDef = (*variables)[this->name];
   llvm::Value *val = this->value->codegen(builder, context, module, variables);
 
+  if (val->getType()->getPointerElementType()->isArrayTy() &&
+      varDef.v_type->getPointerElementType()->isArrayTy()) {
+
+    if (val->getType()->getPointerElementType()->getArrayElementType() ==
+        varDef.v_type->getPointerElementType()->getArrayElementType()) {
+      printf("\n----v----\n");
+
+      printf("\n----v----\n");
+
+      auto x = builder->CreateStore(val, (*variables)[this->name].v_value);
+      (*variables)[this->name] = VariableDefinition(val, val->getType());
+
+      return x;
+    }
+  }
+
   if (val->getType() != varDef.v_type) {
     printf("Error! Attempted to assign incompatible type to variable `%s`",
            this->name.c_str());
@@ -236,7 +288,9 @@ void AST_Block::print(int indent) {
     return;
   }
 
-  printf("%sBlock{\n", boom_utils::indent_string(indent).c_str());
+  printf("%sBlock[name=%s, type=%s]{\n",
+         boom_utils::indent_string(indent).c_str(), this->block_name.c_str(),
+         this->block_type.c_str());
   for (AST_Node *node : this->nodes)
     node->print(indent + 1);
   printf("%s}\n", boom_utils::indent_string(indent).c_str());
@@ -249,6 +303,66 @@ llvm::Value *AST_Block::codegen(
     std::unique_ptr<llvm::LLVMContext> &context,
     std::unique_ptr<llvm::Module> &module,
     std::unique_ptr<std::map<std::string, VariableDefinition>> &variables) {
+
+  bool is_array = true;
+  llvm::Type *arr_element_type = nullptr;
+  std::vector<llvm::Value *> values;
+
+  for (auto n : this->nodes) {
+    if (n->get_type() == AST_FUNCTION_ARGUMENT || !this->might_be_array) {
+      is_array = false;
+      break;
+    }
+
+    if (n->get_type() == AST_NODE_EOF)
+      break;
+
+    auto v = n->codegen(builder, context, module, variables);
+    arr_element_type = v->getType();
+
+    if (v->getType()->isVoidTy() || !(v->getType()->isIntegerTy()) ||
+        (v->getType() != arr_element_type))
+      is_array = false;
+
+    values.push_back(v);
+  }
+
+  if (is_array) {
+    llvm::ArrayType *array_type =
+        llvm::ArrayType::get(arr_element_type, values.size());
+    llvm::Value *array = builder->CreateAlloca(array_type, 0, "array");
+
+    for (int i = 0; i < values.size(); ++i) {
+      llvm::Value *ptr_to_element_at_i = builder->CreateGEP(
+          array_type, array, {builder->getInt32(0), builder->getInt32(i)});
+
+      builder->CreateStore(values.at(i), ptr_to_element_at_i);
+    }
+
+    return array;
+  }
+
+  if (this->block_type == "struct") {
+    std::vector<llvm::Type *> structFields;
+
+    std::map<std::string, int> s_field_map;
+
+    for (int i = 0; i < this->nodes.size(); ++i) {
+      AST_FunctionArgument *field_arg =
+          (AST_FunctionArgument *)this->nodes.at(i);
+      s_field_map.insert({field_arg->name, i});
+      structFields.push_back(
+          get_type_from_t_name(field_arg->type, context, variables));
+    }
+
+    llvm::StructType *structType =
+        llvm::StructType::create(*context, structFields, this->block_name);
+
+    (*variables)[this->block_name] = VariableDefinition(structType);
+    (*variables)[this->block_name].struct_field_map = s_field_map;
+
+    return nullptr;
+  }
 
   llvm::Value *last = nullptr;
 
@@ -345,10 +459,18 @@ void AST_FunctionDefinition::print(int indent) {
   std::cout << boom_utils::indent_string(indent) << ")\n";
 }
 
-llvm::Type *get_type_from_t_name(std::string &t_name,
-                                 std::unique_ptr<llvm::LLVMContext> &context) {
+llvm::Type *get_type_from_t_name(
+    std::string &t_name, std::unique_ptr<llvm::LLVMContext> &context,
+    std::unique_ptr<std::map<std::string, VariableDefinition>> &variables) {
   if (t_name == "int")
     return llvm::Type::getInt32Ty(*context);
+
+  if (t_name == "string")
+    return llvm::Type::getInt8PtrTy(*context);
+
+  if (variables->contains(t_name)) {
+    return (*variables)[t_name].s_type;
+  }
 
   return llvm::Type::getVoidTy(*context);
 }
@@ -370,11 +492,22 @@ llvm::Value *AST_FunctionDefinition::codegen(
       func_arg_types.push_back(builder->getInt32Ty());
       (*variables)[arg->name] =
           VariableDefinition(nullptr, builder->getInt8PtrTy(), true);
+    } else {
+      auto t = get_type_from_t_name(arg->type, context, variables);
+      func_arg_types.push_back(t->getPointerTo());
+      t->print(llvm::outs());
+      (*variables)[arg->name] =
+          VariableDefinition(nullptr, t->getPointerTo(), true);
     }
   }
 
-  llvm::FunctionType *funcType = llvm::FunctionType::get(
-      get_type_from_t_name(this->return_type, context), func_arg_types, false);
+  llvm::Type *result_type =
+      (variables->contains(this->return_type))
+          ? ((*variables)[this->return_type].s_type->getPointerTo())
+          : (get_type_from_t_name(this->return_type, context, variables));
+
+  llvm ::FunctionType *funcType =
+      llvm::FunctionType::get(result_type, func_arg_types, false);
 
   llvm::Function *func = llvm::Function::Create(
       funcType, llvm::Function::ExternalLinkage, this->name, *module);
@@ -429,9 +562,6 @@ llvm::Value *AST_FunctionArgument::codegen(
     std::unique_ptr<llvm::LLVMContext> &context,
     std::unique_ptr<llvm::Module> &module,
     std::unique_ptr<std::map<std::string, VariableDefinition>> &variables) {
-
-  std::cout << "x" << this->name << std::endl;
-
   return nullptr;
 }
 
@@ -461,6 +591,45 @@ llvm::Value *AST_FunctionCall::codegen(
     std::unique_ptr<llvm::Module> &module,
     std::unique_ptr<std::map<std::string, VariableDefinition>> &variables) {
 
+  if (variables->count(this->name) > 0) {
+    VariableDefinition stored_ref = (*variables)[this->name];
+
+    /*
+      Struct initialization
+    */
+    if (stored_ref.is_struct) {
+      VariableDefinition s_type = stored_ref;
+
+      if (s_type.s_type == nullptr) {
+        printf("Error while initializing struct `%s`\n", this->name.c_str());
+        exit(1);
+      }
+
+      llvm::Value *s_instance =
+          builder->CreateAlloca(s_type.s_type, 0, this->name + "_struct");
+
+      std::vector<llvm::Value *> indices(2);
+      indices[0] = builder->getInt32(0);
+
+      for (int i = 0; i < this->args.size() - 1; ++i) {
+        AST_Node *curr_arg = this->args.at(i);
+        indices[1] = builder->getInt32(i);
+
+        llvm::Value *ptr =
+            builder->CreateGEP(s_instance->getType()->getPointerElementType(),
+                               s_instance, indices);
+
+        builder->CreateStore(
+            curr_arg->codegen(builder, context, module, variables), ptr);
+      }
+
+      return s_instance;
+    }
+  }
+
+  /*
+    Return statements
+  */
   if (this->name == "return") {
     /*
       EOF is part of the function arguments, therefore when we have no arguments
@@ -597,7 +766,61 @@ llvm::Value *AST_BinaryOperation::codegen(
     std::unique_ptr<std::map<std::string, VariableDefinition>> &variables) {
 
   auto lhs = this->left->codegen(builder, context, module, variables);
+
+  if (this->op == "accessor") {
+    llvm::Value *s_instance = lhs;
+
+    if (this->right->get_type() != AST_NODE_VARIABLE_REFERENCE) {
+      printf("Error, invalid accessor!");
+      exit(1);
+    }
+
+    AST_VariableReference *accessor_ref = (AST_VariableReference *)this->right;
+
+    // printf("\n----acc---\n");
+    // s_instance->getType()->print(llvm::outs());
+    // printf("\n----acc---\n");
+    // std::cout << s_instance->getType()->getPointerElementType()->isStructTy()
+    //           << std::endl;
+    // printf("\n----acc---\n");
+
+    std::string s_name = boom_utils::trim_string(
+        s_instance->getType()->getPointerElementType()->getStructName().str());
+
+    int accessor_index =
+        (*variables)[s_name].struct_field_map[accessor_ref->name];
+
+    std::cout << accessor_index << std::endl;
+
+    std::vector<llvm::Value *> indices(2);
+    indices[0] = builder->getInt32(0);
+    indices[1] = builder->getInt32(accessor_index);
+
+    llvm::PointerType *ptrType =
+        static_cast<llvm::PointerType *>(s_instance->getType());
+    llvm::Type *elementType = ptrType->getElementType();
+
+    llvm::Value *fieldPtr =
+        builder->CreateGEP(elementType, s_instance, indices, "fieldPtr");
+
+    llvm::Value *fieldVal = builder->CreateLoad(
+        fieldPtr->getType()->getPointerElementType(), fieldPtr);
+
+    return fieldVal;
+  }
+
   auto rhs = this->right->codegen(builder, context, module, variables);
+
+  if (this->op == "=") {
+    if (llvm::isa<llvm::LoadInst>(lhs)) {
+      llvm::LoadInst *load_inst = (llvm::LoadInst *)lhs;
+      llvm::Value *valPtr = load_inst->getPointerOperand();
+
+      return builder->CreateStore(rhs, valPtr);
+    } else {
+      return builder->CreateStore(rhs, lhs);
+    }
+  }
 
   if (this->op == "+")
     return builder->CreateAdd(lhs, rhs);
@@ -630,9 +853,17 @@ llvm::Value *AST_BinaryOperation::codegen(
 
     llvm::Value *elementPtr = builder->CreateInBoundsGEP(
         lhs->getType()->getPointerElementType(), lhs, indices, "elementPtr");
-    llvm::Value *elementValue = builder->CreateLoad(
+
+    llvm::LoadInst *elementValue = builder->CreateLoad(
         lhs->getType()->getPointerElementType()->getArrayElementType(),
         elementPtr);
+
+    //     this->left->print();
+    //     this->right->print();
+
+    // printf("\n----ind-----\n");
+    // elementValue->print(llvm::outs());
+    // printf("\n----ind-----\n");
 
     return elementValue;
   }

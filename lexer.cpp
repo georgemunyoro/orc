@@ -66,6 +66,9 @@ std::vector<Token> Lexer::lex() {
     case '>':
       this->push_token(TOKEN_ANGLE_CLOSE, ">");
       break;
+    case '.':
+      this->push_token(TOKEN_PERIOD, ".");
+      break;
 
     case ',':
       this->push_token(TOKEN_COMMA, ",");

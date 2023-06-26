@@ -74,9 +74,7 @@ AST_FunctionDefinition *Parser::parse_function_definition() {
 
 AST_FunctionCall *Parser::parse_function_call() {
   std::string f_name = this->current_token()->value;
-
-  this->cursor += 1;
-  // std::vector<AST_Node *> f_args = this->parse_expr();
+  ++this->cursor;
 
   AST_Node *node = this->parse_expr();
   std::vector<AST_Node *> f_args;
@@ -180,6 +178,27 @@ AST_Loop *Parser::parse_while_loop() {
   return loop;
 }
 
+AST_Node *Parser::parse_binary_operation(AST_Node *lhs_op) {
+  if (current_token()->id < TOKEN_OPERATOR_PLUS)
+    return lhs_op;
+
+  bool should_skip_closing_token = current_token()->id == TOKEN_BRACKET_OPEN;
+
+  std::string op_id = current_token()->id == TOKEN_BRACKET_OPEN
+                          ? "index"
+                          : current_token()->value;
+
+  AST_BinaryOperation *bin_op = new AST_BinaryOperation(op_id, lhs_op, nullptr);
+
+  ++this->cursor;
+  bin_op->right = this->parse_expr();
+
+  if (should_skip_closing_token)
+    ++this->cursor;
+
+  return bin_op;
+}
+
 AST_Node *Parser::parse_expr() {
   Token *token = this->current_token();
 
@@ -200,28 +219,71 @@ AST_Node *Parser::parse_expr() {
       return this->parse_conditional();
     } else if (token->value == "while") {
       return this->parse_while_loop();
+    } else if (this->peek_next_token()->id == TOKEN_PERIOD) {
+      AST_VariableReference *lhs =
+          new AST_VariableReference(this->current_token()->value);
+      this->cursor += 2;
+
+      AST_BinaryOperation *accessor_op =
+          new AST_BinaryOperation("accessor", lhs, this->parse_expr());
+
+      return accessor_op;
+    } else if (token->value == "struct") {
+      ++this->cursor;
+      std::string s_name = this->current_token()->value;
+
+      this->cursor += 2;
+      std::vector<AST_FunctionArgument *> f_args;
+
+      AST_Block *struct_def_block = new AST_Block();
+
+      if (this->current_token()->id == TOKEN_BRACE_CLOSE) {
+        this->cursor += 1;
+      } else {
+
+        for (;;) {
+
+          AST_FunctionArgument *arg =
+              new AST_FunctionArgument(this->current_token()->value, "");
+          ++this->cursor;
+
+          std::string t_name = "";
+
+          bool should_exit = false;
+
+          while (this->current_token()->id != TOKEN_COMMA) {
+            t_name += this->current_token()->value;
+            ++this->cursor;
+
+            if (this->current_token()->id == TOKEN_BRACE_CLOSE) {
+              should_exit = true;
+              break;
+            }
+          }
+
+          arg->type = t_name;
+
+          struct_def_block->nodes.push_back(arg);
+
+          if (should_exit)
+            break;
+
+          ++this->cursor;
+        }
+      }
+
+      struct_def_block->block_type = "struct";
+      struct_def_block->block_name = s_name;
+
+      ++this->cursor;
+
+      return struct_def_block;
+
     } else if (this->peek_next_token()->id == TOKEN_PAREN_OPEN) {
       return this->parse_function_call();
     } else {
-      auto var_ref = this->parse_variable_reference();
-      if (current_token()->id >= TOKEN_OPERATOR_PLUS) {
-        AST_BinaryOperation *bin_op =
-            new AST_BinaryOperation(current_token()->value, var_ref, nullptr);
-        ++this->cursor;
-        bin_op->right = this->parse_expr();
-        return bin_op;
-      }
-
-      if (current_token()->id == TOKEN_BRACKET_OPEN) {
-        AST_BinaryOperation *bin_op =
-            new AST_BinaryOperation("index", var_ref, nullptr);
-        ++this->cursor;
-        bin_op->right = this->parse_expr();
-        ++this->cursor;
-        return bin_op;
-      }
-
-      return var_ref;
+      AST_VariableReference *var_ref = this->parse_variable_reference();
+      return this->parse_binary_operation(var_ref);
     }
   }
 
@@ -231,20 +293,13 @@ AST_Node *Parser::parse_expr() {
     for (;;) {
       AST_Node *node = this->parse_expr();
       block->add_node(*node);
+      block->might_be_array = false;
 
       if (node->get_type() == AST_NODE_EOF)
         break;
     }
 
-    if (current_token()->id >= TOKEN_OPERATOR_PLUS) {
-      AST_BinaryOperation *bin_op =
-          new AST_BinaryOperation(current_token()->value, block, nullptr);
-      ++this->cursor;
-      bin_op->right = this->parse_expr();
-      return bin_op;
-    }
-
-    return block;
+    return this->parse_binary_operation(block);
   }
 
   if (token->id == TOKEN_COMMA || token->id == TOKEN_SEMICOLON) {
